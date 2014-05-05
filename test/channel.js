@@ -3,7 +3,7 @@
 'use strict';
 
 var assert = require('assert');
-var defer = require('when').defer;
+var defer = require('bluebird').defer;
 var Channel = require('../lib/channel').Channel;
 var Connection = require('../lib/connection').Connection;
 var util = require('./util');
@@ -112,7 +112,7 @@ test("open, close", channelTest(
       .then(function() {
         var closed = defer();
         ch.closeBecause("Bye", defs.constants.REPLY_SUCCESS,
-                        closed.resolve);
+                        closed.resolve.bind(closed));
         return closed.promise;
       })
       .then(succeed(done), fail(done));
@@ -186,8 +186,9 @@ suite("channel machinery", function() {
 
 test("RPC", channelTest(
   function(ch, done) {
+    var rpcLatch;
     open(ch).then(function() {
-      var rpcLatch = latch(3, done);
+      rpcLatch = latch(3, done);
 
       function wheeboom(err, f) {
         if (err !== null) rpcLatch(err);
@@ -250,7 +251,7 @@ test("RPC on closed channel", channelTest(
   function(ch, done) {
     open(ch);
     var close = defer(), fail1 = defer(), fail2 = defer();
-    ch.on('error', close.resolve);
+    ch.on('error', close.resolve.bind(close));
 
     function failureCb(d) {
       return function(err) {

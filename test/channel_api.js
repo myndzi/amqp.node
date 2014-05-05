@@ -6,8 +6,8 @@ var util = require('./util');
 var succeed = util.succeed, fail = util.fail;
 var schedule = util.schedule;
 var randomString = util.randomString;
-var when = require('when');
-var defer = when.defer;
+var Promise = require('bluebird');
+var defer = Promise.defer;
 
 var URL = process.env.URL || 'amqp://localhost';
 
@@ -29,7 +29,13 @@ function expectFail(promise) {
 // some of the `then` noise, while still failing if any of its
 // arguments fail.
 function doAll(/* promise... */) {
-  return when.all(arguments)
+  // https://github.com/petkaantonov/bluebird/wiki/Optimization-killers#3-managing-arguments
+  var args = new Array(arguments.length);
+  for(var i = 0; i < args.length; ++i) {
+    args[i] = arguments[i];
+  }
+  
+  return Promise.all(args)
     .then(function(results) {
       return results[results.length - 1];
     });
@@ -569,7 +575,7 @@ confirmtest('multiple confirms', function(ch) {
 
         for (var i=0; i < num; i++) sendAndPushPromise();
 
-        return when.all(cs).then(function() {
+        return Promise.all(cs).then(function() {
           if (multipleRainbows) return true;
           else if (num > 500) throw new Error(
             "Couldn't provoke the server" +

@@ -5,7 +5,7 @@ var Connection = require('../lib/connection').Connection;
 var PassThrough =
   require('stream').PassThrough ||
   require('readable-stream/passthrough');
-var defer = require('when').defer;
+var defer = require('bluebird').defer;
 var defs = require('../lib/defs');
 
 var schedule = (typeof setImmediate === 'function') ?
