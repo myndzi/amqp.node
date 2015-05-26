@@ -23,9 +23,10 @@ function baseChannelTest(client, server) {
 
     if (LOG_ERRORS) c.on('error', console.warn);
 
-    c.open(OPEN_OPTS).then(function() {
-      client(c, bothDone);
-    }, fail(bothDone));
+    c.open(OPEN_OPTS, function(err, ok) {
+      if (err === null) client(c, bothDone);
+      else fail(bothDone);
+    });
 
     pair.server.read(8); // discard the protocol header
     var s = util.runServer(pair.server, function(send, await) {
@@ -76,6 +77,7 @@ var DELIVER_FIELDS = {
 
 function open(ch) {
   var opened = defer();
+  ch.allocate();
   ch._rpc(defs.ChannelOpen, {outOfBand: ''}, defs.ChannelOpenOk,
           function(err, _) {
             if (err === null) opened.resolve();
@@ -126,7 +128,10 @@ test("open, close", channelTest(
 
 test("server close", channelTest(
   function(ch, done) {
-    ch.on('error', succeed(done));
+    ch.on('error', function(error) {
+      assert.strictEqual(504, error.code);
+      succeed(done)();
+    });
     open(ch);
   },
   function(send, await, done, ch) {
@@ -186,9 +191,8 @@ suite("channel machinery", function() {
 
 test("RPC", channelTest(
   function(ch, done) {
-    var rpcLatch;
+    var rpcLatch = latch(3, done);
     open(ch).then(function() {
-      rpcLatch = latch(3, done);
 
       function wheeboom(err, f) {
         if (err !== null) rpcLatch(err);
@@ -225,7 +229,10 @@ test("Bad RPC", channelTest(
     // We want to see the RPC rejected and the channel closed (with an
     // error)
     var errLatch = latch(2, done);
-    ch.on('error', succeed(errLatch));
+    ch.on('error', function(error) {
+      assert.strictEqual(505, error.code);
+      succeed(errLatch)();
+    });
     
     open(ch)
       .then(function() {
@@ -251,7 +258,10 @@ test("RPC on closed channel", channelTest(
   function(ch, done) {
     open(ch);
     var close = defer(), fail1 = defer(), fail2 = defer();
-    ch.on('error', close.resolve.bind(close));
+    ch.on('error', function(error) {
+      assert.strictEqual(504, error.code);
+      close.resolve();
+    });
 
     function failureCb(d) {
       return function(err) {
@@ -397,7 +407,10 @@ test("zero byte msg", channelTest(
 test("bad delivery", channelTest(
   function(ch, done) {
     var errorAndClose = latch(2, done);
-    ch.on('error', succeed(errorAndClose));
+    ch.on('error', function(error) {
+      assert.strictEqual(505, error.code);
+      succeed(errorAndClose)();
+    });
     ch.on('close', succeed(errorAndClose));
     open(ch);
   },
@@ -448,7 +461,10 @@ test("bad consumer", channelTest(
     ch.on('delivery', function() {
       throw new Error("I am a bad consumer");
     });
-    ch.on('error', succeed(errorAndClose));
+    ch.on('error', function(error) {
+      assert.strictEqual(541, error.code);
+      succeed(errorAndClose)();
+    });
     ch.on('close', succeed(errorAndClose));
     open(ch);
   },
@@ -464,7 +480,10 @@ test("bad send in consumer", channelTest(
   function(ch, done) {
     var errorAndClose = latch(2, done);
     ch.on('close', succeed(errorAndClose));
-    ch.on('error', succeed(errorAndClose));
+    ch.on('error', function(error) {
+      assert.strictEqual(541, error.code);
+      succeed(errorAndClose)();
+    });
 
     ch.on('delivery', function() {
       ch.sendMessage({routingKey: 'foo',

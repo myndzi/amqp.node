@@ -10,7 +10,11 @@
  * [Examples from RabbitMQ tutorials][tutes]
 
 A library for making AMQP 0-9-1 clients for Node.JS, and an AMQP 0-9-1
-client for Node.JS v0.8, v0.9, v0.10, and v0.11.
+client for Node.JS v0.8, v0.9, v0.10, v0.11, v0.12, and io.js v1.x.
+
+This library does not implement [AMQP
+1.0](https://github.com/squaremo/amqp.node/issues/63) or [AMQP
+0-10](https://github.com/squaremo/amqp.node/issues/94).
 
 Project status:
 
@@ -19,15 +23,57 @@ Project status:
  - A fair few tests
  - Measured test coverage
  - Ports of the [RabbitMQ tutorials][rabbitmq-tutes] as [examples][tutes]
+ - Used in production
 
 Still working on:
 
  - Getting to 100% (or very close to 100%) test coverage
  - Settling on completely stable APIs
- - Establishing a long history of battle-testing in production (if
-   anyone has been using it in production, do let me know)
 
-## Client API example
+## Callback API example
+
+```javascript
+var q = 'tasks';
+
+function bail(err) {
+  console.error(err);
+  process.exit(1);
+}
+
+// Publisher
+function publisher(conn) {
+  conn.createChannel(on_open);
+  function on_open(err, ch) {
+    if (err != null) bail(err);
+    ch.assertQueue(q);
+    ch.sendToQueue(q, new Buffer('something to do'));
+  }
+}
+
+// Consumer
+function consumer(conn) {
+  var ok = conn.createChannel(on_open);
+  function on_open(err, ch) {
+    if (err != null) bail(err);
+    ch.assertQueue(q);
+    ch.consume(q, function(msg) {
+      if (msg !== null) {
+        console.log(msg.content.toString());
+        ch.ack(msg);
+      }
+    });
+  }
+}
+
+require('amqplib/callback_api')
+  .connect('amqp://localhost', function(err, conn) {
+    if (err != null) bail(err);
+    consumer(conn);
+    publisher(conn);        
+  });
+```
+
+## Promise API example
 
 ```javascript
 var q = 'tasks';

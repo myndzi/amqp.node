@@ -1,8 +1,53 @@
 # Change log for amqplib
 
-## Changes since v0.1.3
+## Changes in v0.3.2 (since v0.3.1)
 
-    git log v0.1.3..
+   git log v0.3.1..v0.3.2
+
+ * Make the engine specification more flexible to admit io.js releases
+
+## Changes in v0.3.1 (since v0.3.0)
+
+   git log v0.3.0..v0.3.1
+
+### Fixes
+
+ * Fail in the right way when a channel cannot be allocated [issue
+ 129](https://github.com/squaremo/amqp.node/issues/129)
+ * Make `waitForConfirms` work properly in callback API [PR
+   116](https://github.com/squaremo/amqp.node/pull/116)
+
+### Enhancements
+
+ * Two new options while connecting:
+   [timeout](https://github.com/squaremo/amqp.node/pull/118) and [keep
+   alive](https://github.com/squaremo/amqp.node/pull/125) (thanks to
+   @rexxars and @jcrugzz respectively)
+
+## Changes in v0.3.0 (since v0.2.1)
+
+   git log v0.2.1..v0.3.0
+
+### Enhancements
+
+ * Allow additional client properties to be set for a connection
+   [Issue 98](https://github.com/squaremo/amqp.node/issues/98) and
+   [PR 80](https://github.com/squaremo/amqp.node/pull/80)
+ * New method in channel API to wait for all unconfirmed messages
+   [Issue 89](https://github.com/squaremo/amqp.node/issues/89)
+ * Now supports RabbitMQ's `EXTERNAL` authentication plugin
+   [Issue 105](https://github.com/squaremo/amqp.node/issues/105)
+
+## Changes in v0.2.1 (since v0.2.0)
+
+### Fixes
+
+ * Do tuning negotation properly [PR
+   84](https://github.com/squaremo/amqp.node/pull/84)
+
+## Changes in v0.2.0 (since v0.1.3)
+
+    git log v0.1.3..v0.2.0
 
 ### Fixes
 
@@ -15,7 +60,7 @@
  * The response to assertExchange now contains the exchange name,
    analagous to assertQueue (issue 49)
  * The channel method `prefetch` now has a global flag, to be
-   [compatible][rabbitmq-prefetch-global] with newer RabbitMQ
+   [compatible with newer RabbitMQ][rabbitmq-prefetch-global].
 
 ## Changes in v0.1.3 (since v0.1.2)
 

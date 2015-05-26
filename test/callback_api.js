@@ -6,6 +6,8 @@ var api = require('../callback_api');
 var util = require('./util');
 var schedule = util.schedule;
 var randomString = util.randomString;
+var kCallback = util.kCallback;
+var domain = require('domain');
 
 var URL = process.env.URL || 'amqp://localhost';
 
@@ -13,13 +15,15 @@ function connect(cb) {
   api.connect(URL, {}, cb);
 }
 
-// Suitable for supplying a `done` value
+// Construct a node-style callback from a `done` function
 function doneCallback(done) {
   return function(err, _) {
     if (err == null) done();
     else done(err);
   };
 }
+
+function ignore() {}
 
 function twice(done) {
   var first = function(err) {
@@ -39,15 +43,6 @@ function failCallback(done) {
   return function(err, _) {
     if (err == null) done(new Error('Expected failure, got ' + val));
     else done();
-  };
-}
-
-// Split the callback into separate continuations, handy for exiting
-// early.
-function kCallback(k, ek) {
-  return function(err, val) {
-    if (err == null) k(val);
-    else ek(err);
   };
 }
 
@@ -212,8 +207,106 @@ channel_test('send to and get from queue', function(ch, done) {
 suite('ConfirmChannel', function() {
 
 confirm_channel_test('Receive confirmation', function(ch, done) {
-  ch.publish('amq.topic', 'no.one.bound', new Buffer('foo'),
-             {}, done);
+  // An unroutable message, on the basis that you're not allowed a
+  // queue with an empty name, and you can't make bindings to the
+  // default exchange. Tricky eh?
+  ch.publish('', '', new Buffer('foo'), {}, done);
+});
+
+confirm_channel_test('Wait for confirms', function(ch, done) {
+  for (var i=0; i < 1000; i++) {
+    ch.publish('', '', new Buffer('foo'), {});
+  }
+  ch.waitForConfirms(done);
+});
+
+});
+
+suite("Error handling", function() {
+
+/*
+I don't like having to do this, but there appears to be something
+broken about domains in Node.JS v0.8 and mocha. Apparently it has to
+do with how mocha and domains hook into error propogation:
+https://github.com/visionmedia/mocha/issues/513 (summary: domains in
+Node.JS v0.8 don't prevent uncaughtException from firing, and that's
+what mocha uses to detect .. an uncaught exception).
+
+Using domains with amqplib *does* work in practice in Node.JS v0.8:
+that is, it's possible to throw an exception in a callback and deal
+with it in the active domain, and thereby avoid it crashing the
+program.
+ */
+if (util.versionGreaterThan(process.versions.node, '0.8')) {
+  test('Throw error in connection open callback', function(done) {
+    var dom = domain.createDomain();
+    dom.on('error', failCallback(done));
+    connect(dom.bind(function(err, conn) {
+      throw new Error('Spurious connection open callback error');
+    }));
+  });
+}
+
+// TODO: refactor {error_test, channel_test}
+function error_test(name, fun) {
+  test(name, function(done) {
+    var dom = domain.createDomain();
+    dom.run(function() {
+      connect(kCallback(function(c) {
+        // Seems like there were some unironed wrinkles in 0.8's
+        // implementation of domains; explicitly adding the connection
+        // to the domain makes sure any exception thrown in the course
+        // of processing frames is handled by the domain. For other
+        // versions of Node.JS, this ends up being belt-and-braces.
+        dom.add(c);
+        c.createChannel(kCallback(function(ch) {
+          fun(ch, done, dom);
+        }, done));
+      }, done));
+    });
+  });
+}
+
+error_test('Channel open callback throws an error', function(ch, done, dom) {
+  dom.on('error', failCallback(done));
+  throw new Error('Error in open callback');
+});
+
+error_test('RPC callback throws error', function(ch, done, dom) {
+  dom.on('error', failCallback(done));
+  ch.prefetch(0, false, function(err, ok) {
+    throw new Error('Spurious callback error');
+  });
+});
+
+error_test('Get callback throws error', function(ch, done, dom) {
+  dom.on('error', failCallback(done));
+  ch.assertQueue('test.cb.get-with-error', {}, function(err, ok) {
+    ch.get('test.cb.get-with-error', {noAck: true}, function() {
+      throw new Error('Spurious callback error');
+    });
+  });
+});
+
+error_test('Consume callback throws error', function(ch, done, dom) {
+  dom.on('error', failCallback(done));
+  ch.assertQueue('test.cb.consume-with-error', {}, function(err, ok) {
+    ch.consume('test.cb.consume-with-error', ignore, {noAck: true}, function() {
+      throw new Error('Spurious callback error');
+    });
+  });
+});
+
+error_test('Get from non-queue invokes error k', function(ch, done, dom) {
+  var both = twice(failCallback(done));
+  dom.on('error', both.first);
+  ch.get('', {}, both.second);
+});
+
+error_test('Consume from non-queue invokes error k', function(ch, done, dom) {
+  var both = twice(failCallback(done));
+  dom.on('error', both.first);
+  ch.consume('', both.second);
 });
 
 });
